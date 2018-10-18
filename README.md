@@ -1,3 +1,3 @@
-# SKJ ⛈
+# SKJ 🛀🏻
 
-### Zadania z SKJ od Smyka 🛀🏻
+### Zadania z SKJ od Smyka 👶🏻
