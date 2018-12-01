@@ -1,6 +1,49 @@
 import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+class ServerConnection extends Connection{
+
+	DataOutputStream dos;
+
+
+	public ServerConnection(Socket socket) throws IOException{
+
+		super(socket);
+
+		dos = new DataOutputStream(socket.getOutputStream());
+	}
+
+	public boolean transfer(File file) throws IOException{
+
+	/*	FileInputStream fis = new FileInputStream(file);
+			//fis.getChannel().position(startPoint);
+
+		byte[] buffer = new byte[Database.BUFFER];
+
+		while (fis.read(buffer) > 0) {
+			dos.write(buffer);
+			System.out.println(dos.size());
+		}
+
+		fis.close();
+*/
+		FileInputStream fis = new FileInputStream(file);
+		byte[] buffer = new byte[Database.BUFFER];
+
+
+		while (fis.read(buffer) > 0) {
+			System.out.println("Bytes sent: " + dos.size());
+			dos.write(buffer);
+		}
+
+		fis.close();
+		dos.close();
+		return false;
+	}
+}
 
 public class Client {
 
@@ -9,65 +52,40 @@ public class Client {
 	private final static int srvPort = 4000;
 
 
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
 
 		InetAddress srvIP = InetAddress.getByName(srvName);
 
-		Socket server = new Socket(srvIP, srvPort);
+		ServerConnection server = new ServerConnection(new Socket(srvIP, srvPort));
 
-		InputStreamReader in = new InputStreamReader(server.getInputStream());
-		OutputStreamWriter out = new OutputStreamWriter(server.getOutputStream());
+		if(server.getMessage().getAction().equals("AUTH")){
+			server.sendMessage("AUTH:rudzik:rudzik123");
 
-		BufferedReader br = new BufferedReader(in);
-		BufferedWriter bw = new BufferedWriter(out);
+			if(server.getMessage().getAction().equals("FILE")){
 
-		bw.write("USER:rudzik");
-		bw.newLine();
-		bw.flush();
+				log("Server is ready for file transfer");
 
-		if(br.readLine().equals("ok")){
-			log("Username is ok");
+				log("Calculating checksum for file");
 
-			bw.write("PASS:1234");
-			bw.newLine();
-			bw.flush();
+				File file = new File(Client.class.getResource(Database.INPUT).getFile());
 
-			if(br.readLine().equals("ok")){
-				log("Password is ok");
+				String checksum = Utils.checksum(file.getPath());
+				//String checksum = "61ff2c892bfb5e9e093ad5d119d9466604a88b6a";//Remember to delete : from output of ^
 
-				File file = new File(Client.class.getResource("lol.txt").getFile());
 
-				bw.write("ACTION:transfer:"+file.length());
-				bw.newLine();
-				bw.flush();
+				long size = file.length();
+				String name = file.getName();
 
-				sendFile(server, file);
-			}else{
-				log("Incorrect password");
-				server.close();
+				log("META:" + name + ":" + size + ":" + checksum);
+
+				server.sendMessage("META:" + name +  ":" + size + ":" + checksum);
+
+				if(server.getMessage().getAction().equals("TRANSFER")){
+					log("Transfering file..");
+					server.transfer(file);//Integer.parseInt(server.getMessage().getData(0))
+				}
 			}
-		}else{
-			log("Incorrect username");
-			server.close();
 		}
-
-		log("File sent");
-
-		log("Server response: " + br.readLine());
-
-		server.close();
-	}
-
-	private static void sendFile(Socket socket, File file) throws IOException{
-		DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-		FileInputStream fis = new FileInputStream(file);
-		byte[] buffer = new byte[4096];
-
-		while (fis.read(buffer) > 0) {
-			dos.write(buffer);
-		}
-
-		fis.close();
 	}
 
 	private static void log(String msg){
