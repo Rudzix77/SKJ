@@ -17,7 +17,7 @@ public class Main {
 			case 1:
 				if(args[0].equals("server")){
 					GameServer gS = new GameServer("Game Manager");
-					gS.listen();
+						gS.listen();
 
 					new HttpServer("Rank List", gS).listen();
 				}

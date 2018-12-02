@@ -30,14 +30,20 @@ public class HttpServer {
 							"<meta http-equiv='refresh' content='3; URL=.' />" +
 							"<style>*{text-align: center; font-size: 20px;font-family: 'Raleway'}</style></head><body>";
 
-					for(Game g : gS.storage.history.values()){
 
-						String winner = g.result == State.INGAME ? "W trakcie" : g.result == State.WIN ? g.a.name : g.b.name;
+					if(gS.storage.history.values().size() != 0){
+						for(Game g : gS.storage.history.values()){
 
-						String color = g.result == State.INGAME ? "#6897BB" : "#678E2B";
+							String winner = g.result == State.INGAME ? "W trakcie" : g.result == State.WIN ? g.a.name : g.b.name;
 
-						website += String.format("<p>POJEDYNEK <b>%s</b> VS. <b>%s</b> -> WYGRAŁ <b style='color: %s'>%s</b></p>", g.a.name, g.b.name, color, winner);
+							String color = g.result == State.INGAME ? "#6897BB" : "#678E2B";
+
+							website += String.format("<p>POJEDYNEK <b>%s</b> VS. <b>%s</b> -> WYGRAŁ <b style='color: %s'>%s</b></p>", g.a.name, g.b.name, color, winner);
+						}
+					}else{
+						website += "<p><b>Brak informacji o toczących się rozgrywkach</b></p>";
 					}
+
 
 					website+= "</body></html>";
 

@@ -14,8 +14,6 @@ import java.util.*;
 /*
 TODO
 
-QUIT z System.in i informacja do wszystkich, ze leci i siema
-
 Zrobic man in the middle do przekazania nazwy i portu w każdym requescie
 
  */
@@ -32,6 +30,8 @@ public class Agent {
 	public Agent(String name, int port) {
 		this.name = name;
 		this.port = port;
+
+		new Thread(() -> inputHandler()).start();
 	}
 
 	private void inputHandler(){
@@ -48,9 +48,6 @@ public class Agent {
 	}
 
 	public void run(String hostName, int port){
-
-		new Thread(() -> inputHandler()).start();
-
 		try{
 			connectJoin(establishConnection(hostName, port));
 
@@ -69,7 +66,7 @@ public class Agent {
 
 			});
 
-			log("Rozegrano rozgrywkę ze wszystkimi graczami z listy. Przechodzę w tryb oczekiwania");
+			log("Rozegrano rozgrywkę ze wszystkimi graczami z listy.");
 			host();
 
 		}catch (Exception e){
@@ -92,6 +89,8 @@ public class Agent {
 	}
 
 	public void host(){
+
+		log("Przechodzę w tryb oczekiwania");
 
 		storage.put(new Player(name, "localhost", port), State.NONE);
 
