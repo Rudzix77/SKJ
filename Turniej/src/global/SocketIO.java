@@ -36,9 +36,17 @@ public class SocketIO{
 		socket.close();
 	}
 
+	public String getHost(){
+		return socket.getInetAddress().getHostName();
+	}
+
+	public int getPort(){
+		return socket.getPort();
+	}
+
 	@Override
 	public String toString() {
-		return String.format("{Socket -> ip: %s, port: %d}", socket.getInetAddress().getHostName(), socket.getPort());
+		return String.format("{Socket -> ip: %s, port: %d}", getHost(), getPort());
 	}
 }
 
