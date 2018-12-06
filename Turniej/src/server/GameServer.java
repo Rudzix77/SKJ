@@ -1,11 +1,13 @@
 package server;
 
+import agent.Storage.Player;
 import global.Server;
 import global.SocketIO;
 import server.Storage.Storage;
 import server.Storage.Utils;
 
 import java.io.IOException;
+import java.util.stream.Collectors;
 
 public class GameServer {
 
@@ -44,6 +46,9 @@ public class GameServer {
 							case "QUIT":
 								quit(parts[1], s);
 								break;
+							case "ONLINE":
+								online(parts[1], s);
+								break;
 						}
 					}
 
@@ -64,7 +69,7 @@ public class GameServer {
 
 		log("Nowa sesja ->" + Utils.encodeGame(data));
 
-		//sessionId:Whostart
+		//Format sessionId:Whostart
 		s.emit((sessionId) + ":" + (Math.random() > 0.5 ? 1 : 0));
 
 		sessionId++;
@@ -72,13 +77,24 @@ public class GameServer {
 	}
 
 	//Format SESSIONId-WIN_NAME
-	private void result(String data, SocketIO s) throws IOException {
+	private void result(String data, SocketIO s){
 
 		String[] parts = data.split("-");
 
 		log("Nowy wynik dla sesji " + Integer.parseInt(parts[0]));
 
 		storage.changeResult(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+	}
+
+	private void online(String data, SocketIO s) throws IOException{
+
+		String[] parts = data.split(":");
+
+		if(storage.isOnline(parts[0], Integer.parseInt(parts[1]))){
+			s.emit("1");
+		}else{
+			s.emit("0");
+		}
 	}
 
 	public void log(String msg){

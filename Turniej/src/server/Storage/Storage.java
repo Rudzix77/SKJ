@@ -28,5 +28,17 @@ public class Storage {
 
 		history.entrySet().removeIf(e -> e.getValue().a.equals(p) || e.getValue().b.equals(p));
 	}
+
+	public boolean isOnline(String host, int port){
+
+		for(Game e : history.values()){
+			if((e.a.host.equals(host) && e.a.port == port) || (e.b.host.equals(host) && e.b.port == port)){
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 }
 

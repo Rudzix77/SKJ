@@ -11,88 +11,67 @@ import global.Utils;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.*;
-/*
-TODO
-
-Zrobic man in the middle do przekazania nazwy i portu w każdym requescie
-
- */
 
 public class Agent {
 
 	private static int[] range = {1, 10};
 
+	private static String serverAdress = "localhost";
+	private static int serverPort = 3000;
+
+
 	private String name;
+	private String hostName;
 	private int port;
 
 	private Storage storage = new Storage();
 
-	public Agent(String name, int port) {
+	public Agent(String name, String hostName, int port) {
 		this.name = name;
+		this.hostName = hostName;
 		this.port = port;
 
 		new Thread(() -> inputHandler()).start();
 	}
 
-	private void inputHandler(){
-		Scanner in = new Scanner(System.in);
-
-		String cmd;
-		while((cmd = in.nextLine()) != null){
-			if(cmd.equals("QUIT")){
-				handleDisconnect();
-
-				System.exit(0);
-			}
-		}
-	}
-
 	public void run(String hostName, int port){
+
 		try{
-			connectJoin(establishConnection(hostName, port));
+			sendJoin(establishConnection(hostName, port, 5));
+		}catch (Exception e){
+			err("Nie udało się nawiązać połączenia. Agent wprowadzający jest niedostępny");
+			System.exit(0);
+		}
 
-			log("Lista graczy:");
-			storage.history.forEach(e -> {
-				log(e.name + " ("+e.host+":"+e.port+") -> "+e.state);
-			});
+		log("Lista graczy:");
+
+		storage.history.forEach(e -> {
+			log(e.name + " ("+e.host+":"+e.port+") -> "+e.state);
+		});
 
 
-			storage.notPlayed().forEach((Server.Throwing<Player>) e -> {
-				boolean result = connectPlay(establishConnection(e.host, e.port));
+		storage.notPlayed().forEach(e -> {
+			try{
+				boolean result = sendPlay(establishConnection(e.host, e.port, 5));
 
 				log(result ? "WYGRANA" : "PRZEGRANA");
 
 				storage.put(e, result);
+			}catch (Exception ex){
+				storage.remove(e);
+				err(String.format("Nie udało się nawiązać połączenia. Agent %s:%s jest niedostępny", e.host, e.port));
+			}
+		});
 
-			});
-
-			log("Rozegrano rozgrywkę ze wszystkimi graczami z listy.");
-			host();
-
-		}catch (Exception e){
-			e.printStackTrace();
-		}
-	}
-
-	private SocketIO establishConnection(String hostName, int port) throws InterruptedException{
-
-		log("Proba nawiazania polaczenia -> "+hostName+":"+port);
-
-		try{
-			return new SocketIO(new Socket(hostName, port));
-		}catch (Exception e){
-			log("Nie udalo sie polaczyc -> Ponowna proba za 5 sekund");
-			Thread.sleep(5000);
-
-			return establishConnection(hostName, port);
-		}
+		log("Rozegrano rozgrywkę ze wszystkimi dostępnymi graczami.");
+		host();
 	}
 
 	public void host(){
 
 		log("Przechodzę w tryb oczekiwania");
 
-		storage.put(new Player(name, "localhost", port), State.NONE);
+		storage.put(new Player(name, hostName, port), State.NONE);
 
 		try{
 			Server server = new Server(port, name);
@@ -119,34 +98,72 @@ public class Agent {
 		}
 	}
 
-	private void disconnect(SocketIO s) throws IOException {
-		storage.remove(Player.of(s.recieve(), s.getHost(), Integer.parseInt(s.recieve())));
+	private SocketIO establishConnection(String hostName, int port, int attempts) throws Exception{
 
-		showScoreboard();
+		log("Proba #" +attempts+ " nawiazania polaczenia -> "+hostName+":"+port);
+
+		try{
+			return new SocketIO(new Socket(hostName, port));
+		}catch (Exception e){
+			log("Nie udalo sie polaczyc -> Ponowna proba za 5 sekund");
+			Thread.sleep(5000);
+
+			if(attempts == 0){
+				String res = Request.get(serverAdress, serverPort, "ONLINE->" + hostName + ":" + port);
+
+				if(res.equals("0")){
+					throw new Exception("Host wygasł");
+				}
+			}
+
+			return establishConnection(hostName, port, (attempts == -1) ? attempts : attempts-1);
+		}
 	}
 
-	private void handleDisconnect(){
+	private Player acceptConnection(SocketIO s) throws Exception{
+		s.emit("OK");
+
+		String name = s.recieve();
+		log("Otrzymano nazwe agenta -> " + name);
+
+		int port = Integer.parseInt(s.recieve());
+		log("Otrzymano port agenta -> " + port);
+
+		return Player.of(name, s.getHost(), port);
+	}
+
+	private void sendSignature(SocketIO s) throws IOException{
+		s.emit(name);
+		s.emit(port);
+	}
+
+	private void disconnect(SocketIO s) throws IOException {
+		storage.remove(Player.of(s.recieve(), s.getHost(), Integer.parseInt(s.recieve())));
+	}
+
+	private void sendDisconnect(){
+		System.out.println(storage.notPlayed());
 		if(storage.notPlayed().size() == 0){
-			storage.history.forEach((Server.Throwing<Player>) e -> {
-				SocketIO s = establishConnection(e.host, e.port);
+			storage.history.stream().filter(e -> !e.equals(Player.of(name, hostName, port))).forEach((Server.Throwing<Player>) e -> {
+				SocketIO s = establishConnection(e.host, e.port, 5);
 				s.emit("QUIT");
-				s.emit(name);
-				s.emit(port);
+				sendSignature(s);
 			});
 
-			Request.post("localhost", 3000, "QUIT->"+ name + ":" + "localhost:" + port);
+			Request.post(serverAdress, serverPort, "QUIT->"+ name + ":" + hostName + ":" + port);
 		}else{
 			log("Nie można zakonczyc gry, gdyz agent nie zagral ze wszystkimi innymi");
 		}
 	}
 
-	public void connectJoin(SocketIO s) throws Exception{
+	public void sendJoin(SocketIO s) throws Exception{
 
 		s.emit("JOIN");
 
 		if(s.recieve().equals("OK")){
-			s.emit(name);
-			s.emit(this.port);
+
+			log("Połączenie przyjęto.");
+
 
 			log("Oczekuję na informację o aktualnych graczach");
 
@@ -167,15 +184,10 @@ public class Agent {
 		s.close();
 	}
 
-
 	private void join(SocketIO s) throws Exception{
+
 		s.emit("OK");
-
-		String name = s.recieve();
-		log("Otrzymano nazwe agenta -> " + name);
-
-		int port = Integer.parseInt(s.recieve());
-		log("Otrzymano port agenta -> " + port);
+		log("Przyjęto połączenie od agenta");
 
 		storage.history.forEach((Server.Throwing<Player>) e -> {
 			s.emit(String.format("%s:%s:%d",e.name, e.host, e.port));
@@ -183,23 +195,24 @@ public class Agent {
 
 		s.emit("_");
 
-		storage.put(new Player(name, s.getHost(), port), State.NOTPLAYED);
-		log("Dodano agenta do listy graczy");
+		log("Wysłano agentowi listę graczy");
 
 		s.close();
 
 	}
 
-	public boolean connectPlay(SocketIO s) throws Exception{
+	public boolean sendPlay(SocketIO s) throws Exception{
 
 		s.emit("PLAY");
 
 		if(s.recieve().equals("OK")){
+			log("Połączenie przyjęto.");
 
-			s.emit(name);
-			s.emit(this.port);
+			sendSignature(s);
+			log("Wysłano informacje o agencie");
 
 			String key = Utils.getKey();
+			log("Wygenerowano klucz do odszyfrowania liczby" + key);
 
 			String num = "" + (new Random().nextInt((range[1] - range[0]) + 1) + range[0]);
 			log("Wygenerowana liczba: " + num);
@@ -240,17 +253,10 @@ public class Agent {
 
 	private void play(SocketIO s) throws Exception {
 
-		s.emit("OK");
-
-		String name = s.recieve();
-		log("Otrzymano nazwe agenta -> " + name);
-
-		int port = Integer.parseInt(s.recieve());
-		log("Otrzymano port agenta -> " + port);
-
-		Player player = new Player(name, s.getHost(), port);
+		Player player = acceptConnection(s);
 
 		String key = Utils.getKey();
+		log("Wygenerowano klucz do odszyfrowania liczby" + key);
 
 		String num = "" + (new Random().nextInt((range[1] - range[0]) + 1) + range[0]);
 		log("Wygenerowana liczba: " + num);
@@ -261,8 +267,8 @@ public class Agent {
 		String recievedNum = s.recieve();
 		log("Otrzymano zaszyfrowaną liczbę od przeciwnika " + recievedNum);
 
-		String data = String.format("%s->%s:%s:%d-%s:%s:%d", "SESSION", this.name, "localhost", this.port, name, s.getHost(), port);
-		String[] output = Request.get("localhost", 3000, data).split(":");
+		String data = String.format("%s->%s:%s:%d-%s:%s:%d", "SESSION", name, hostName, port, player.name, s.getHost(), player.port);
+		String[] output = Request.get(serverAdress, serverPort, data).split(":");
 
 		log("Wysyłam informacje do serwera o nowej grze");
 		log("Otrzymałem od serwera gry informacje o numerze sesji oraz kto powinien rozpoczac -> Nr. "+ output[0] + ", Rozpoczyna: "+output[1]);
@@ -295,10 +301,7 @@ public class Agent {
 
 		storage.put(player, result);
 
-		Request.post("localhost", 3000, "RESULT->" + output[0] + "-" + (result ? "1" : "0"));
-
-		showScoreboard();
-
+		Request.post(serverAdress, serverPort, "RESULT->" + output[0] + "-" + (result ? "1" : "0"));
 	}
 
 	private boolean gameCounting(int num, SocketIO s) throws Exception{
@@ -324,17 +327,36 @@ public class Agent {
 		return last == 1;
 	}
 
+	private void inputHandler(){
+		Scanner in = new Scanner(System.in);
+
+		String cmd;
+		while((cmd = in.nextLine()) != null){
+			if(cmd.equals("QUIT")){
+				sendDisconnect();
+
+				log("Stan rozgrywek:");
+				storage.history.forEach((Server.Throwing<Player>) e -> {
+					if(!e.name.equals(name)){
+						log(String.format("%s (%s:%d) -> %s", e.name, e.host, e.port, ((e.state == State.WIN) ? "Wygrana" : "Przegrana")));
+
+					}
+				});
+
+				System.exit(0);
+			}
+		}
+	}
+
 	public void log(String msg){
 		System.out.println(String.format("[%s]: %s", name, msg));
+	}
+
+	public void err(String msg){
+		System.err.println(String.format("[%s]: %s", name, msg));
 	}
 
 	public void log(int num){
 		log(num+"");
 	}
-
-	public void showScoreboard(){
-		log("Aktualny stan rozgrywek ze znanymi graczami:");
-		log(storage.toString());
-	}
-
 }

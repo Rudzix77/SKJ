@@ -2,16 +2,21 @@ import agent.Agent;
 import server.GameServer;
 import server.HttpServer;
 
+import java.net.InetAddress;
+
 
 public class Main {
 	public static void main(String[] args) throws Exception{
+
+		String hostName = InetAddress.getLocalHost().getHostAddress();
+
 		switch (args.length){
 			case 4:
-				new Agent(args[0], Integer.parseInt(args[1])).run(args[2], Integer.parseInt(args[3]));
+				new Agent(args[0], hostName,Integer.parseInt(args[1])).run(args[2], Integer.parseInt(args[3]));
 				break;
 
 			case 2:
-				new Agent(args[0], Integer.parseInt(args[1])).host();
+				new Agent(args[0], hostName, Integer.parseInt(args[1])).host();
 				break;
 
 			case 1:
