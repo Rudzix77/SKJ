@@ -1,3 +1,5 @@
+package Utils;
+
 import java.io.*;
 import java.net.Socket;
 
@@ -7,7 +9,7 @@ public class SocketIO{
 	private BufferedReader reader;
 	private BufferedWriter writer;
 
-	public SocketIO(Socket socket) throws Exception {
+	public SocketIO(Socket socket) throws IOException {
 
 		this.socket = socket;
 
